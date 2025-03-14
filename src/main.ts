@@ -175,44 +175,25 @@ async function processFiles(we: string) {
     const dataJson = await fs.promises.readFile(dataFile, "utf8");
 
     const dataObj = mpqDataToJson(dataJson);
-    const uiMap = {
-      TriggerEvents: "TriggerEventStrings",
-      // TriggerConditions: "TriggerConditionStrings",
-      TriggerActions: "TriggerActionStrings",
-      TriggerCalls: "TriggerCallStrings",
-    };
+    const stringObj = mpqStringToJson(stringJson);
 
-    const uiObj = {};
+    const uiMap = {
+      TriggerEvents: "event",
+      TriggerActions: "action",
+      TriggerCalls: "call",
+    };
 
     for (const key in uiMap) {
       if (dataObj.hasOwnProperty(key)) {
-        uiObj[key] = dataObj[key];
-        delete dataObj[key];
+        const newObj = mergeObjects(
+          stringObj[key.replace("s", "Strings")],
+          dataObj[key]
+        );
+        mergeJson(`${outputDir}/mpq/dzapi2/${uiMap[key]}.json`, newObj);
+      } else {
+        mergeJson(`${outputDir}/mpq/dzapi2/define.json`, dataObj[key]);
       }
     }
-
-    mergeJson(`${outputDir}/mpq/dzapi2/define.json`, dataObj);
-
-    const stringObj = mpqStringToJson(stringJson);
-    const eventObj = mergeObjects(
-      uiObj["TriggerEvents"],
-      stringObj[uiMap["TriggerEvents"]]
-    );
-
-    mergeJson(`${outputDir}/mpq/dzapi2/event.json`, eventObj);
-
-    const actionObj = mergeObjects(
-      uiObj["TriggerActions"],
-      stringObj[uiMap["TriggerActions"]]
-    );
-
-    mergeJson(`${outputDir}/mpq/dzapi2/action.json`, actionObj);
-    const callObj = mergeObjects(
-      uiObj["TriggerCalls"],
-      stringObj[uiMap["TriggerCalls"]]
-    );
-
-    mergeJson(`${outputDir}/mpq/dzapi2/call.json`, callObj);
   };
 
   const mpqOldStringFn = async () => {
@@ -257,9 +238,16 @@ async function processFiles(we: string) {
     }
   };
 
-  // const fnList = [dzapiFn, japiFn, nativeFn, mpqUIFn, mpqDefineFn, mpqWeFn]
+  const fnList = [
+    dzapiFn,
+    japiFn,
+    nativeFn,
+    mpqUIFn,
+    mpqDefineFn,
+    mqpOldDzApiFn,
+  ];
 
-  const fnList = [mqpOldDzApiFn];
+  // const fnList = [mpqWeFn];
 
   for (const fn of fnList) {
     await fn();

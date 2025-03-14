@@ -19,9 +19,10 @@ export function mpqNewUiToJson(fileContent: string): object {
     if (line.startsWith("[") && line.endsWith("]")) {
       const bracketCount = (line.match(/\[/g) || []).length;
       const sectionName = line
-        .trim()
         .slice(bracketCount, -bracketCount)
-        .replace(/^\.+/g, "");
+        .replace(/^"|"$/g, "") // 去掉开头的引号和结尾的引号
+        .trim()
+        .replace(/^\.+/g, ""); // 去掉开头的点号 例如 .args
 
       const oldName = currentSection[bracketCount - 1];
       currentSection[bracketCount - 1] = sectionName;
@@ -48,6 +49,7 @@ export function mpqNewUiToJson(fileContent: string): object {
       //   const trimmedValue = value.replace(/^"|"$/g, "");
       const trimmedValue = value
         .replace(/^"|"$/g, "")
+        .replace(/\\"/g, "")
         .replace(/"/g, "'")
         .replace(/\\\\/g, "\\");
       p[key] = trimmedValue;
@@ -95,11 +97,12 @@ export function mpqEditToJson(fileContent: string): object {
     }
     if (line.includes("=")) {
       const [key, value = ""] = line.split("=");
-      let trimmedValue = value.replace(/~/g, "$").replace(/"/g, "'") || "";
-      // sections[currentSection][key] = trimmedValue;
-      sections[key] = JSON.stringify(trimmedValue)
+      let trimmedValue = JSON.stringify(value.replace(/^"|"$/g, ""))
+        .replace(/^"|"$/g, "")
         .replace(/\\u[0-9a-fA-F]{4}/g, "")
-        .replace(/^"|"$/g, "");
+        .trim();
+      // sections[currentSection][key] = trimmedValue;
+      sections[key] = trimmedValue;
     }
   }
   return sections;
@@ -121,12 +124,18 @@ export function mpqStringToJson(fileContent: string): object {
       sections[currentSection] = {};
     } else if (line.includes("=")) {
       const [key, value = ""] = line.split("=");
-      const trimmedValue =
-        value.replace(/^"|"$/g, "").replace(/~/g, "$").replace(/"/g, "'") || "";
+      if (key.startsWith("//")) {
+        continue;
+      }
+      const trimmedValue = value
+        .replace(/^"|"$/g, "")
+        .trim()
+        .replace(/"/g, "'");
       if (key.endsWith("Hint")) {
         sections[currentSection][key.replace("Hint", "")]["comment"] =
           trimmedValue;
       } else if (key in sections[currentSection]) {
+        // TODO:description 需要根据,分隔
         sections[currentSection][key]["description"] = trimmedValue;
       } else {
         sections[currentSection][key] = {};
@@ -178,7 +187,7 @@ export function mpqDataToJson(fileContent: string): object {
   return filterEmptyObjects(sections);
 }
 
-function filterEmptyObjects(obj:object) {
+function filterEmptyObjects(obj: object) {
   return Object.keys(obj)
     .filter((key) => Object.keys(obj[key]).length > 0)
     .reduce((acc, key) => {
@@ -215,20 +224,20 @@ const parseUI = (
         break;
       }
 
-      uiTable["arg"] = tempValue.map((v) => ({
+      uiTable["args"] = tempValue.map((v) => ({
         type: v,
       }));
       break;
     }
     case "_Defaults": {
-      if (!uiTable["arg"]) {
+      if (!uiTable["args"]) {
         break;
       }
       const tempValue = value.split(",");
 
       tempValue.forEach((v, index) => {
         if (v !== "" && v !== "_") {
-          uiTable["arg"][index]["default"] = v;
+          uiTable["args"][index]["default"] = v;
         }
       });
       break;
@@ -239,9 +248,9 @@ const parseUI = (
       tempValue.forEach((v, index) => {
         if (v !== "_") {
           if (index % 2 === 0) {
-            uiTable["arg"][index]["max"] = v;
+            uiTable["args"][index]["max"] = v;
           } else {
-            uiTable["arg"][index]["min"] = v;
+            uiTable["args"][index]["min"] = v;
           }
         }
       });
