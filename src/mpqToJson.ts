@@ -44,9 +44,12 @@ export function mpqNewUiToJson(fileContent: string): object {
       p = temp;
     } else if (line.includes("=")) {
       // 解析键值对
-      const [key, value] = line.split("=").map((s) => s.trim());
-      //   const trimmedValue = value.replace(/^"|"$/g, "") || "";
-      const trimmedValue = value.replace(/^"|"$|\\"/g, "") || "";
+      const [key, value = ""] = line.split("=").map((s) => s.trim());
+      //   const trimmedValue = value.replace(/^"|"$/g, "");
+      const trimmedValue = value
+        .replace(/^"|"$/g, "")
+        .replace(/"/g, "'")
+        .replace(/\\\\/g, "\\");
       p[key] = trimmedValue;
     }
   }
@@ -131,7 +134,7 @@ export function mpqStringToJson(fileContent: string): object {
       }
     }
   }
-  return sections;
+  return filterEmptyObjects(sections);
 }
 export function mpqDataToJson(fileContent: string): object {
   const sections: {
@@ -172,7 +175,16 @@ export function mpqDataToJson(fileContent: string): object {
       }
     }
   }
-  return sections;
+  return filterEmptyObjects(sections);
+}
+
+function filterEmptyObjects(obj:object) {
+  return Object.keys(obj)
+    .filter((key) => Object.keys(obj[key]).length > 0)
+    .reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {});
 }
 
 const parseUI = (
@@ -254,6 +266,9 @@ const parseDefine = (
   key: string,
   value: string
 ): any => {
+  if (value === "") {
+    return;
+  }
   const tempValue = value.split(",").map((v) => v.trim());
   //   const tempValue = value.split(",").map((v) =>
   //     v
