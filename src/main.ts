@@ -11,6 +11,8 @@ import {
   mpqEditToJson,
 } from "./mpqToJson";
 
+import { generatingTsDefinitions } from "./jsonToTs";
+
 console.time("build");
 console.log("Generating json");
 
@@ -255,8 +257,10 @@ async function processFiles(we: string) {
 }
 
 const we: string = process.env.ydwe as string;
-processFiles(we).catch(console.error);
+// processFiles(we).catch(console.error);
 
 // console.log("Generating definitions");
+const inputDir = path.resolve("./dist");
+generatingTsDefinitions(`${inputDir}/jass/common.json`);
 
 console.timeEnd("build");
