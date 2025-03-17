@@ -73,11 +73,11 @@ function fixType(type: string): string {
   return type;
 }
 
-function typeDef(value: typeDeclaration) {
+function typeToTs(value: typeDeclaration) {
   return `declare interface ${value.name} extends ${value.extends} { __${value.name}: never; }\n`;
 }
 
-function globalDef(value: globalDeclaration) {
+function globalToTs(value: globalDeclaration) {
   let tempString = "";
   tempString += `declare ${value.isConstant ? "const" : "var"} ${value.name}`;
 
@@ -92,7 +92,7 @@ function globalDef(value: globalDeclaration) {
   return tempString;
 }
 
-function functionDef(value: functionDeclaration | nativeDeclaration) {
+function funcToTs(value: functionDeclaration | nativeDeclaration) {
   let tempString = "";
   tempString += `declare function ${value.name}(`;
 
@@ -204,8 +204,55 @@ function mpqFileToJsdoc(jassFileName: string, jassKeyName: string) {
     }
   }
 }
-// d.ts + jsdoc 生成
-export function generatingTsDefinitions(input: string) {
+
+// common.json文件路径
+export function makeBaseType(input: string) {
+  const data = fs.readFileSync(input, "utf8");
+  const json: libraryDefinition = JSON.parse(data);
+
+  const stream = fs.createWriteStream("base.d.ts");
+
+  const mpqPath = path.resolve("dist/mpq/ydwe/define.json");
+  const mpqString = fs.readFileSync(mpqPath, "utf-8");
+  const mpqJson = JSON.parse(mpqString);
+
+  const wePath = path.resolve("dist/WorldEditStrings.json");
+  const weString = fs.readFileSync(wePath, "utf-8");
+  const weJson = JSON.parse(weString);
+
+  stream.write("/** @noSelfInFile */\n\n");
+  stream.write(
+    "/** 编号 */\ndeclare interface handle { __handle: never; }\n\n"
+  );
+
+  for (const [key, value] of Object.entries(json)) {
+    const mpqTypes = mpqJson["TriggerTypes"][key];
+    if (mpqTypes !== undefined) {
+      let display = mpqTypes["display"] as string;
+      if (display.startsWith("WESTRING")) {
+        const weValue = weJson[display] as string;
+        if (weValue.startsWith("WESTRING")) {
+          display = weValue as string;
+        }
+        display = weJson[display] as string;
+      }
+
+      stream.write(`/** ${display} */\n`);
+    }
+
+    if (value.symbol === "type") {
+      stream.write(typeToTs(value));
+      stream.write(`\n`);
+    }
+  }
+
+  stream.end();
+}
+
+/**
+ * blizzard.j common.j japi.j KKAPI.j
+ */
+export function makeGlobalType(input: string) {
   const data = fs.readFileSync(input, "utf8");
   const json: libraryDefinition = JSON.parse(data);
 
@@ -222,11 +269,45 @@ export function generatingTsDefinitions(input: string) {
 
     if (value.symbol === "type") {
       // define.json
-      stream.write(typeDef(value));
+      stream.write(typeToTs(value));
     } else if (value.symbol === "global") {
-      stream.write(globalDef(value));
+      stream.write(globalToTs(value));
     } else if (value.symbol === "native" || value.symbol === "function") {
-      stream.write(functionDef(value));
+      stream.write(funcToTs(value));
+    }
+  }
+
+  stream.end();
+}
+
+/**
+ * d.ts + jsdoc 生成
+ * blizzard.j 一个native都没有
+ * common.j 一个function都没有 KKPRE 现在也是
+ * @param input
+ */
+export function makeFunctionType(input: string) {
+  const data = fs.readFileSync(input, "utf8");
+  const json: libraryDefinition = JSON.parse(data);
+
+  const output = path.basename(input, ".json");
+  const stream = fs.createWriteStream(output + ".d.ts");
+
+  stream.write("/** @noSelfInFile */\n\n");
+
+  for (const [key, value] of Object.entries(json)) {
+    const mpqDoc = mpqFileToJsdoc(output, key);
+    if (mpqDoc !== undefined) {
+      stream.write(mpqDoc);
+    }
+
+    if (value.symbol === "type") {
+      // define.json
+      stream.write(typeToTs(value));
+    } else if (value.symbol === "global") {
+      stream.write(globalToTs(value));
+    } else if (value.symbol === "native" || value.symbol === "function") {
+      stream.write(funcToTs(value));
     }
   }
 

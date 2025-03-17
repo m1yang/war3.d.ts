@@ -11,7 +11,7 @@ import {
   mpqEditToJson,
 } from "./mpqToJson";
 
-import { generatingTsDefinitions } from "./jsonToTs";
+import { makeBaseType } from "./jsonToTs";
 
 console.time("build");
 console.log("Generating json");
@@ -85,7 +85,7 @@ async function writeJsonFile(
   }
 }
 
-async function processFiles(we: string) {
+async function jassFileToJson(we: string) {
   const outputDir = path.resolve("./dist");
   const jassDir = path.resolve(we, "jass");
   // BlizzardAPI.j DzAPI.j KKAPI.j KKPRE.j
@@ -147,6 +147,19 @@ async function processFiles(we: string) {
     }
   };
 
+  const fnList = [
+    dzapiFn,
+    japiFn,
+    nativeFn,
+  ];
+
+  for (const fn of fnList) {
+    await fn();
+  }
+}
+
+async function mpqFileToJson(we: string) {
+  const outputDir = path.resolve("./dist");
   const mpqDir = path.resolve(we, "share/mpq");
   const mpqFolders = ["bzapi", "dzapi2", "japi", "kkapi", "ydwe"];
 
@@ -254,9 +267,6 @@ async function processFiles(we: string) {
   };
 
   const fnList = [
-    dzapiFn,
-    japiFn,
-    nativeFn,
     mpqUIFn,
     mpqDefineFn,
     mqpOldDzApiFn,
@@ -270,10 +280,11 @@ async function processFiles(we: string) {
 }
 
 const we: string = process.env.ydwe as string;
-// processFiles(we).catch(console.error);
+// jassFileToJson(we).catch(console.error);
+// mpqFileToJson(we).catch(console.error);
 
-// console.log("Generating definitions");
+console.log("Generating definitions");
 const inputDir = path.resolve("./dist");
-generatingTsDefinitions(`${inputDir}/jass/common.json`);
+makeBaseType(`${inputDir}/jass/common.json`);
 
 console.timeEnd("build");
