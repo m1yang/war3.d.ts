@@ -76,6 +76,9 @@ export function mpqNewDefToJson(fileContent: string): object {
       sections[currentSection] = {};
     } else if (line.includes("=")) {
       const [key, value = ""] = line.split("=");
+      if (key.startsWith("//")) {
+        continue;
+      }
       const trimValue = value.replace(/^"|"$/g, "").replace(/"/g, "'").trim();
       parseDefine(sections, currentSection, key, trimValue);
     }

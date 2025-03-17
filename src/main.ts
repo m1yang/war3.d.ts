@@ -107,16 +107,29 @@ async function processFiles(we: string) {
   const japiFn = async () => {
     const japiDir = path.resolve(jassDir, "japi");
     const japiFiles = fs.readdirSync(japiDir);
+    let jsonAll = {};
+
     for (const file of japiFiles) {
-      const filePath = path.resolve(japiDir, file);
       if (path.extname(file) === ".j") {
-        await writeJsonFile(
-          filePath,
-          `${outputDir}/jass/japi/${path.basename(file, ".j")}.json`,
-          jassToJson
-        );
+        const filePath = path.resolve(japiDir, file);
+        const fileContent = await fs.promises.readFile(filePath, "utf8");
+        const jsonObject = jassToJson(fileContent);
+
+        jsonAll = { ...jsonAll, ...jsonObject };
       }
     }
+
+    const jsonFilePath = path.resolve(outputDir, "jass/japi.json");
+
+    const jsonDir = path.dirname(jsonFilePath);
+    if (!fs.existsSync(jsonDir)) {
+      fs.mkdirSync(jsonDir, { recursive: true });
+    }
+    await fs.promises.writeFile(
+      jsonFilePath,
+      JSON.stringify(jsonAll, null, 2),
+      "utf8"
+    );
   };
 
   // system/ht common.j blizzard.j
