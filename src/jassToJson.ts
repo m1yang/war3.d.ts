@@ -1,4 +1,6 @@
 export function jassToJson(fileContent: string): object {
+  // const fileContent = await fs.promises.readFile(filePath, "utf8");
+
   let library: {
     [key: string]: any;
   } = {};

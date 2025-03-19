@@ -70,8 +70,11 @@ async function writeJsonFile(
 ) {
   try {
     const fileContent = await fs.promises.readFile(stringFilePath, "utf8");
-    const jsonObject = callback(fileContent);
+    const jsonObject = callback(fileContent) as object;
 
+    for (const value of Object.values(jsonObject)) {
+      value["source"] = path.basename(stringFilePath);
+    }
     const jsonDir = path.dirname(jsonFilePath);
     if (!fs.existsSync(jsonDir)) {
       fs.mkdirSync(jsonDir, { recursive: true });
@@ -115,7 +118,9 @@ async function jassFileToJson(we: string) {
         const filePath = path.resolve(japiDir, file);
         const fileContent = await fs.promises.readFile(filePath, "utf8");
         const jsonObject = jassToJson(fileContent);
-
+        for (const value of Object.values(jsonObject)) {
+          value["source"] = file;
+        }
         jsonAll = { ...jsonAll, ...jsonObject };
       }
     }
