@@ -11,7 +11,7 @@ import {
   mpqEditToJson,
 } from "./mpqToJson";
 
-import { makeBaseType } from "./jsonToTs";
+import { makeBaseType, makeGlobalType, makeFunctionType } from "./jsonToTs";
 
 console.time("build");
 console.log("Generating json");
@@ -39,7 +39,8 @@ function mergeJson(jsonFile: string, content: object) {
   //   },
   // };
 
-  jsonObj = mergeObjects(content, jsonObj);
+  // jsonObj = mergeObjects(content, jsonObj);
+  jsonObj = { ...content, ...jsonObj };
 
   const jsonString = JSON.stringify(jsonObj, null, 2);
   // 写入修改后的JSON字符串到文件
@@ -147,11 +148,7 @@ async function jassFileToJson(we: string) {
     }
   };
 
-  const fnList = [
-    dzapiFn,
-    japiFn,
-    nativeFn,
-  ];
+  const fnList = [dzapiFn, japiFn, nativeFn];
 
   for (const fn of fnList) {
     await fn();
@@ -203,6 +200,7 @@ async function mpqFileToJson(we: string) {
     const dataJson = await fs.promises.readFile(dataFile, "utf8");
 
     const dataObj = mpqDataToJson(dataJson);
+    // console.log(dataObj)
     const stringObj = mpqStringToJson(stringJson);
 
     const uiMap = {
@@ -211,17 +209,20 @@ async function mpqFileToJson(we: string) {
       TriggerCalls: "call",
     };
 
-    for (const key in uiMap) {
-      if (dataObj.hasOwnProperty(key)) {
+    let tempDefine = {};
+    for (const key in dataObj) {
+      if (uiMap[key]) {
         const newObj = mergeObjects(
           stringObj[key.replace("s", "Strings")],
           dataObj[key]
         );
         mergeJson(`${outputDir}/mpq/dzapi2/${uiMap[key]}.json`, newObj);
       } else {
-        mergeJson(`${outputDir}/mpq/dzapi2/define.json`, dataObj[key]);
+        tempDefine[key] = dataObj[key];
       }
     }
+
+    mergeJson(`${outputDir}/mpq/dzapi2/define.json`, tempDefine);
   };
 
   const mpqOldStringFn = async () => {
@@ -266,11 +267,7 @@ async function mpqFileToJson(we: string) {
     }
   };
 
-  const fnList = [
-    mpqUIFn,
-    mpqDefineFn,
-    mqpOldDzApiFn,
-  ];
+  const fnList = [mpqUIFn, mpqDefineFn, mqpOldDzApiFn];
 
   // const fnList = [mpqWeFn];
 
@@ -285,6 +282,15 @@ const we: string = process.env.ydwe as string;
 
 console.log("Generating definitions");
 const inputDir = path.resolve("./dist");
-makeBaseType(`${inputDir}/jass/common.json`);
+// makeBaseType(`${inputDir}/jass/common.json`);
+// makeGlobalType(`${inputDir}/jass/common.json`);
+
+const japiDir = path.resolve(`${inputDir}/jass`);
+const jassFiles = fs.readdirSync(japiDir);
+
+for (const jassFile of jassFiles) {
+  const jassPath = path.resolve(japiDir, jassFile);
+  makeFunctionType(jassPath);
+}
 
 console.timeEnd("build");

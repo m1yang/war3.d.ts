@@ -112,6 +112,7 @@ function funcToTs(value: functionDeclaration | nativeDeclaration) {
 
 type mpqArgs = {
   type: string;
+  name?: string;
   default?: string;
   min?: string;
   max?: string;
@@ -163,18 +164,20 @@ function argsToJsdoc(args: mpqArgs | Array<mpqArgs>) {
   return result;
 }
 
-function mpqToJsDoc(data: mpqUI) {
+function mpqToJsDoc(mpq: mpqUI, jass?: any) {
   let result = "\n";
 
-  const title = data.title ? ` * ${data.title}\n` : "";
-  const desc = data.description ? ` * ${data.description}\n` : "";
-  const comment = data.comment ? ` * @remark\n * ${data.comment}\n *\n` : "";
-  const params = data.args ? argsToJsdoc(data.args) : "";
-  const returns = data.returns ? ` * @return {${fixType(data.returns)}}\n` : "";
-  const label = data.category ? ` * @${data.category}\n` : "";
+  const title = mpq.title ? ` * ${mpq.title}  \n` : "";
+  const desc = mpq.description ? ` * ${mpq.description}\n` : "";
+  const comment = mpq.comment ? ` * @remark\n * ${mpq.comment}\n *\n` : "";
+  //  * @param {string} [somebody=John Doe] - Somebody's name.
+  // 将jass中的args的name加入到mpq中来
+  // const params = mpq.args ? argsToJsdoc(mpq.args) : "";
+  // const returns = mpq.returns ? ` * @return {${fixType(mpq.returns)}}\n` : "";
+  const category = mpq.category ? ` * @${mpq.category}\n` : "";
 
-  const doc = `/**\n${title}${desc} *\n${comment}${params}\n${returns} *\n${label} */`;
-  // const doc = `/**\n${title}${desc} *\n${comment}${label} */`;
+  // const doc = `/**\n${title}${desc} *\n${comment}${params}\n${returns} *\n${category} */`;
+  const doc = `/**\n${title}${desc} *\n${comment}${category} */`;
   result += `${doc}\n`;
   return result;
 }
@@ -188,7 +191,24 @@ const mpqToJass = {
   KKPRE: "kkapi",
 };
 
-function mpqFileToJsdoc(jassFileName: string, jassKeyName: string) {
+const jsonCache: Record<string, any> = {};
+function mpqJsonCache(path: string) {
+  if (jsonCache[path] !== undefined) {
+    return jsonCache[path];
+  }
+  try {
+    const mpqData = fs.readFileSync(path, "utf8");
+    const mpqJson = JSON.parse(mpqData);
+    jsonCache[path] = mpqJson;
+    return mpqJson;
+  } catch (error) {
+    console.error(`Error reading or parsing file at ${path}:`, error);
+    throw error;
+  }
+}
+
+function mpqFileToJsdoc(jassFileName: string, jassKey: string, jassValue: any) {
+  // 找到.j对应的mpq文件
   const mpqDir = path.resolve("dist/mpq", mpqToJass[jassFileName]);
 
   const mpqFiles = fs.readdirSync(mpqDir);
@@ -196,36 +216,33 @@ function mpqFileToJsdoc(jassFileName: string, jassKeyName: string) {
     if (mpqFile === "define.json") {
       continue;
     }
-    const filePath = path.resolve(mpqDir, mpqFile);
-    const mpqData = fs.readFileSync(filePath, "utf8");
-    if (mpqData.includes(`"${jassKeyName}":`)) {
-      const mpqJson = JSON.parse(mpqData);
-      return mpqToJsDoc(mpqJson[jassKeyName]);
+    const mpqPath = path.resolve(mpqDir, mpqFile);
+    const mpqJson = mpqJsonCache(mpqPath);
+
+    if (mpqJson[jassKey] !== undefined) {
+      return mpqToJsDoc(mpqJson[jassKey], jassValue);
     }
   }
 }
 
 // common.json文件路径
 export function makeBaseType(input: string) {
-  const data = fs.readFileSync(input, "utf8");
-  const json: libraryDefinition = JSON.parse(data);
+  const jassJson: libraryDefinition = mpqJsonCache(input);
 
   const stream = fs.createWriteStream("base.d.ts");
 
   const mpqPath = path.resolve("dist/mpq/ydwe/define.json");
-  const mpqString = fs.readFileSync(mpqPath, "utf-8");
-  const mpqJson = JSON.parse(mpqString);
+  const mpqJson = mpqJsonCache(mpqPath);
 
   const wePath = path.resolve("dist/WorldEditStrings.json");
-  const weString = fs.readFileSync(wePath, "utf-8");
-  const weJson = JSON.parse(weString);
+  const weJson = mpqJsonCache(wePath);
 
   stream.write("/** @noSelfInFile */\n\n");
   stream.write(
-    "/** 编号 */\ndeclare interface handle { __handle: never; }\n\n"
+    "/** 对象 */\ndeclare interface handle { __handle: never; }\n\n"
   );
 
-  for (const [key, value] of Object.entries(json)) {
+  for (const [key, value] of Object.entries(jassJson)) {
     const mpqTypes = mpqJson["TriggerTypes"][key];
     if (mpqTypes !== undefined) {
       let display = mpqTypes["display"] as string;
@@ -253,27 +270,21 @@ export function makeBaseType(input: string) {
  * blizzard.j common.j japi.j KKAPI.j
  */
 export function makeGlobalType(input: string) {
-  const data = fs.readFileSync(input, "utf8");
-  const json: libraryDefinition = JSON.parse(data);
+  const jassJson: libraryDefinition = mpqJsonCache(input);
 
   const output = path.basename(input, ".json");
   const stream = fs.createWriteStream(output + ".d.ts");
 
   stream.write("/** @noSelfInFile */\n\n");
+  stream.write('/// <reference path="base.d.ts" />\n\n');
+  for (const [key, value] of Object.entries(jassJson)) {
+    // const mpqDoc = mpqFileToJsdoc(output, key);
+    // if (mpqDoc !== undefined) {
+    //   stream.write(mpqDoc);
+    // }
 
-  for (const [key, value] of Object.entries(json)) {
-    const mpqDoc = mpqFileToJsdoc(output, key);
-    if (mpqDoc !== undefined) {
-      stream.write(mpqDoc);
-    }
-
-    if (value.symbol === "type") {
-      // define.json
-      stream.write(typeToTs(value));
-    } else if (value.symbol === "global") {
+    if (value.symbol === "global") {
       stream.write(globalToTs(value));
-    } else if (value.symbol === "native" || value.symbol === "function") {
-      stream.write(funcToTs(value));
     }
   }
 
@@ -287,26 +298,28 @@ export function makeGlobalType(input: string) {
  * @param input
  */
 export function makeFunctionType(input: string) {
-  const data = fs.readFileSync(input, "utf8");
-  const json: libraryDefinition = JSON.parse(data);
+  const jassJson: libraryDefinition = mpqJsonCache(input);
 
   const output = path.basename(input, ".json");
-  const stream = fs.createWriteStream(output + ".d.ts");
+  const outputDit = path.resolve("dist/types/");
 
+  if (!fs.existsSync(outputDit)) {
+    fs.mkdirSync(outputDit, { recursive: true });
+  }
+  const stream = fs.createWriteStream(
+    path.resolve(outputDit , output + ".d.ts")
+  );
+
+  // stream.write('/// <reference path="base.d.ts" />\n\n');
   stream.write("/** @noSelfInFile */\n\n");
 
-  for (const [key, value] of Object.entries(json)) {
-    const mpqDoc = mpqFileToJsdoc(output, key);
+  for (const [key, value] of Object.entries(jassJson)) {
+    const mpqDoc = mpqFileToJsdoc(output, key, value);
     if (mpqDoc !== undefined) {
       stream.write(mpqDoc);
     }
 
-    if (value.symbol === "type") {
-      // define.json
-      stream.write(typeToTs(value));
-    } else if (value.symbol === "global") {
-      stream.write(globalToTs(value));
-    } else if (value.symbol === "native" || value.symbol === "function") {
+    if (value.symbol === "native" || value.symbol === "function") {
       stream.write(funcToTs(value));
     }
   }

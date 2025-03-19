@@ -29,19 +29,21 @@ export function mpqNewUiToJson(fileContent: string): object {
       currentSection.splice(bracketCount);
 
       p = sections;
-      for (let i = 0; i < bracketCount - 1; i++) {
-        p = p[currentSection[i]];
-      }
 
       const temp = {};
-      if (oldName !== sectionName) {
+      if (bracketCount > 1) {
+        for (let i = 0; i < bracketCount - 1; i++) {
+          p = p[currentSection[i]];
+        }
+        if (sectionName in p) {
+          p[sectionName].push(temp);
+        } else {
+          p[sectionName] = [temp];
+        }
+      } else {
         p[sectionName] = temp;
-      } else if (!Array.isArray(p[sectionName])) {
-        p[sectionName] = [p[sectionName]];
       }
-      if (Array.isArray(p[sectionName])) {
-        p[sectionName].push(temp);
-      }
+
       p = temp;
     } else if (line.includes("=")) {
       // 解析键值对
@@ -139,7 +141,17 @@ export function mpqStringToJson(fileContent: string): object {
           trimmedValue;
       } else if (key in sections[currentSection]) {
         // TODO:description 需要根据,分隔
-        sections[currentSection][key]["description"] = trimmedValue;
+        const r = trimmedValue.split(",").map((s) => {
+          if (s.startsWith("~")) {
+            s = s.slice(1);
+            s = "${" + s + "}";
+          } else {
+            s = s.replace(/'/g, "");
+          }
+          return s;
+        }).join("");
+
+        sections[currentSection][key]["description"] = r;
       } else {
         sections[currentSection][key] = {};
         sections[currentSection][key]["title"] = trimmedValue;
